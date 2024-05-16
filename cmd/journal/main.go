@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/arxonic/journal/internal/config"
+	"github.com/arxonic/journal/internal/http-server/handlers/url/disciplines"
 	"github.com/arxonic/journal/internal/http-server/middleware/auth"
 	"github.com/arxonic/journal/internal/lib/logger/sl"
 	"github.com/arxonic/journal/internal/storage/sqlite"
@@ -50,7 +51,7 @@ func main() {
 
 	// Handlers
 	// router.Get("/url", save.New(log, storage))
-	router.Get("/", http.NotFound)
+	router.Get("/disciplines", disciplines.New(log, storage))
 
 	log.Info("staring server", slog.String("address", cfg.Address))
 

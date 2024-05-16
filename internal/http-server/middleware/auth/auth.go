@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
@@ -13,6 +14,10 @@ import (
 	"github.com/arxonic/journal/internal/storage/sqlite"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+type ContextKey string
+
+const ContextAuthMiddlewareKey ContextKey = "authMiddleware"
 
 type AuthMiddleware struct {
 	Secret  string
@@ -54,65 +59,67 @@ func (m *AuthMiddleware) Auth(next http.Handler) http.Handler {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		}
 
-		// куков нет - выдать
-		// куки есть
-		// куки есть, но плохие - выдать
+		var key models.Key
+
 		encryptedRole := getRoleFromCookie(r)
+
 		if encryptedRole == "" {
-			err = setRoleToCookie(w, email, m)
+			key, err = setRoleToCookie(w, email, m)
 			if err != nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 		} else {
-			err = checkRoleFromCookie(encryptedRole, m.Secret)
+			key, err = checkRoleFromCookie(encryptedRole, m.Secret)
 			if err != nil {
-				err = setRoleToCookie(w, email, m)
+				key, err = setRoleToCookie(w, email, m)
 				if err != nil {
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
 			}
 		}
-		next.ServeHTTP(w, r)
+
+		ctx := context.WithValue(r.Context(), ContextAuthMiddlewareKey, &key)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-func checkRoleFromCookie(encryptedRole, secret string) error {
+func checkRoleFromCookie(encryptedRole, secret string) (models.Key, error) {
+	var key models.Key
 	encDecoded, err := base64.StdEncoding.DecodeString(encryptedRole)
 	if err != nil {
-		return err
+		return key, err
 	}
 
 	dec, err := decrypt([]byte(encDecoded), []byte(secret))
 	if err != nil {
-		return err
+		return key, err
 	}
-
-	var key models.Key
 
 	err = json.Unmarshal(dec, &key)
 	if err != nil {
-		return err
+		return key, err
 	}
 
-	return nil
+	return key, nil
 }
 
-func setRoleToCookie(w http.ResponseWriter, email string, m *AuthMiddleware) error {
+func setRoleToCookie(w http.ResponseWriter, email string, m *AuthMiddleware) (models.Key, error) {
 	key, err := m.Storage.UserRole(email)
 	if err != nil {
-		return err
+		return models.Key{}, err
 	}
 
 	value, err := json.Marshal(key)
 	if err != nil {
-		return err
+		return models.Key{}, err
 	}
 
 	enc, err := encrypt(value, []byte(m.Secret))
 	if err != nil {
-		return err
+		return models.Key{}, err
 	}
 
 	encEncoded := base64.StdEncoding.EncodeToString(enc)
@@ -128,7 +135,7 @@ func setRoleToCookie(w http.ResponseWriter, email string, m *AuthMiddleware) err
 
 	http.SetCookie(w, &cookie)
 
-	return nil
+	return key, nil
 }
 
 func getJWTFromHeader(r *http.Request) string {
