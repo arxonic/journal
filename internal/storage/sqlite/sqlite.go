@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"github.com/arxonic/journal/internal/domain/models"
-	"github.com/arxonic/journal/internal/storage"
+	"github.com/arxonic/journal/internal/domain/scheme"
+	store "github.com/arxonic/journal/internal/storage"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -37,10 +38,44 @@ func (s *Storage) UserRole(email string) (models.Key, error) {
 	err = stmt.QueryRow(email).Scan(&key.ID, &key.Email, &key.Role)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return models.Key{}, storage.ErrUserNotFound
+			return models.Key{}, store.ErrUserNotFound
 		}
 		return models.Key{}, fmt.Errorf("%s:%w", fn, err)
 	}
 
 	return key, nil
+}
+
+func (s *Storage) SaveCourse(course *scheme.Course) (int64, error) {
+	const fn = "storage.sqlite.SaveCourse"
+
+	stmt, err := s.db.Prepare("INSERT INTO courses (num, name) VALUES (?, ?)")
+	if err != nil {
+		return 0, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec(course.Number, course.Name)
+	if err != nil {
+		return 0, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	courseID, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	stmt, err = s.db.Prepare("INSERT INTO assignments (course_id, discipline_id, teacher_id) VALUES (?, ?, ?)")
+	if err != nil {
+		return 0, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	for _, subject := range course.Subjects {
+		_, err = stmt.Exec(courseID, subject.DisciplineID, subject.TeacherID)
+		if err != nil {
+			return 0, fmt.Errorf("%s:%w", fn, err)
+		}
+	}
+
+	return courseID, nil
 }

@@ -1,9 +1,15 @@
 package policy
 
+import "errors"
+
 // "/": ["admin", "student", "teacher"]
 type AccessControl struct {
 	List map[string][]string
 }
+
+var (
+	ErrUnauthorized = errors.New("unauthorized")
+)
 
 func New() *AccessControl {
 	return &AccessControl{make(map[string][]string)}

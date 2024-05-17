@@ -7,23 +7,9 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-type Product struct {
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	Id      string `json:"id"`
-	Referer string `json:"referer"`
-	ImgSrc  string `json:"img"`
-	URL     string `json:"url"`
-}
-
-type Products struct {
-	Products []Product `json:"products"`
-}
-
 type Responce struct {
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
-	//Products Products
 }
 
 const (
@@ -63,5 +49,3 @@ func ValidationError(errs validator.ValidationErrors) Responce {
 		Error:  strings.Join(errMsgs, ", "),
 	}
 }
-
-// 	log.Error("fa
