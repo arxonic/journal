@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,6 +14,10 @@ import (
 	"github.com/arxonic/journal/internal/domain/models"
 	"github.com/arxonic/journal/internal/storage/sqlite"
 	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	ErrOldCookie = errors.New("cookie is old")
 )
 
 type ContextKey string
@@ -70,7 +75,7 @@ func (m *AuthMiddleware) Auth(next http.Handler) http.Handler {
 				return
 			}
 		} else {
-			key, err = checkRoleFromCookie(encryptedRole, m.Secret)
+			key, err = checkRoleFromCookie(email, encryptedRole, m.Secret)
 			if err != nil {
 				key, err = setRoleToCookie(w, email, m)
 				if err != nil {
@@ -86,7 +91,7 @@ func (m *AuthMiddleware) Auth(next http.Handler) http.Handler {
 	})
 }
 
-func checkRoleFromCookie(encryptedRole, secret string) (models.Key, error) {
+func checkRoleFromCookie(email, encryptedRole, secret string) (models.Key, error) {
 	var key models.Key
 	encDecoded, err := base64.StdEncoding.DecodeString(encryptedRole)
 	if err != nil {
@@ -101,6 +106,10 @@ func checkRoleFromCookie(encryptedRole, secret string) (models.Key, error) {
 	err = json.Unmarshal(dec, &key)
 	if err != nil {
 		return key, err
+	}
+
+	if key.Email != email {
+		return key, ErrOldCookie
 	}
 
 	return key, nil

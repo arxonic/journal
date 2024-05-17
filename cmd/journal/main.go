@@ -9,9 +9,10 @@ import (
 	"os"
 
 	"github.com/arxonic/journal/internal/config"
-	"github.com/arxonic/journal/internal/http-server/handlers/url/disciplines"
+	"github.com/arxonic/journal/internal/http-server/handlers/url/courses"
 	"github.com/arxonic/journal/internal/http-server/middleware/auth"
 	"github.com/arxonic/journal/internal/lib/logger/sl"
+	"github.com/arxonic/journal/internal/services/policy"
 	"github.com/arxonic/journal/internal/storage/sqlite"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -39,20 +40,24 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("storage init successfully")
-	_ = storage
 
-	// init router
+	// Init access list
+	accessControl := policy.New()
+
+	// Init router
 	router := chi.NewRouter()
 
-	// middleware
+	// Middleware
 	authMiddleware := auth.New(cfg.Secret, storage)
 	router.Use(middleware.RequestID)
 	router.Use(authMiddleware.Auth)
 
 	// Handlers
-	// router.Get("/url", save.New(log, storage))
-	router.Get("/disciplines", disciplines.New(log, storage))
+	url := "/courses/create"
+	accessControl.Add(url, "admin")
+	router.Post(url, courses.Create(url, log, storage, accessControl))
 
+	// Start server
 	log.Info("staring server", slog.String("address", cfg.Address))
 
 	srv := &http.Server{
