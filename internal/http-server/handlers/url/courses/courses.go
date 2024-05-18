@@ -99,7 +99,7 @@ func EnrollStudents(url string, log *slog.Logger, s StudentsEnroller, ac *policy
 
 		courseID, err := strconv.Atoi(courseIDString)
 		if err != nil {
-			log.Info("unknown course_id")
+			log.Info("unknown courseID")
 			render.JSON(w, r, resp.Error("course not found"))
 			return
 		}
@@ -131,5 +131,69 @@ func EnrollStudents(url string, log *slog.Logger, s StudentsEnroller, ac *policy
 		})
 
 		log.Info("students enrolled")
+	}
+}
+
+type StudentsRemover interface {
+	RemoveStudents(*scheme.Enrollments) error
+}
+
+type RemoveStudentsResponse struct {
+	resp.Responce
+}
+
+func RemoveStudents(url string, log *slog.Logger, s StudentsRemover, ac *policy.AccessControl) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const fn = "http-server.handlers.url.cources.RemoveStudents"
+
+		log = log.With(
+			slog.String("fn", fn),
+		)
+
+		// User role check
+		userAuthData := r.Context().Value(auth.ContextAuthMiddlewareKey).(*models.Key)
+		if !ac.Contains(url, userAuthData.Role) {
+			log.Error("unauthorized operation", sl.Err(policy.ErrUnauthorized))
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Get courseID from URL
+		courseIDString := chi.URLParam(r, "courseID")
+
+		courseID, err := strconv.Atoi(courseIDString)
+		if err != nil {
+			log.Info("unknown courseID")
+			render.JSON(w, r, resp.Error("course not found"))
+			return
+		}
+
+		log = log.With(
+			slog.Int("user_id", userAuthData.ID),
+			slog.Int("course_id", courseID),
+		)
+
+		var req scheme.Enrollments
+
+		err = render.DecodeJSON(r.Body, &req)
+		if err != nil {
+			log.Error("failed to decode request body", sl.Err(err))
+			render.JSON(w, r, resp.Error("failed to decode request"))
+			return
+		}
+
+		err = s.RemoveStudents(&req)
+		if err != nil {
+			log.Error("failed to remove students", sl.Err(err))
+			render.JSON(w, r, resp.Error("failed to remove students"))
+			return
+		}
+
+		// Response
+		render.JSON(w, r, CreateCourseResponse{
+			Responce: resp.OK(),
+		})
+
+		log.Info("students removed")
 	}
 }

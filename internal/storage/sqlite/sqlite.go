@@ -98,3 +98,22 @@ func (s *Storage) EnrollStudents(enrollments *scheme.Enrollments) error {
 
 	return nil
 }
+
+func (s *Storage) RemoveStudents(enrollments *scheme.Enrollments) error {
+	const fn = "storage.sqlite.EnrollStudents"
+
+	stmt, err := s.db.Prepare("DELETE FROM enrollments WHERE course_id = ? AND student_id = ?")
+	if err != nil {
+		return fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	for _, enroll := range enrollments.Enrollments {
+		_, err = stmt.Exec(enroll.CourseID, enroll.StudentID)
+		if err != nil {
+			return fmt.Errorf("%s:%w", fn, err)
+		}
+	}
+
+	return nil
+}

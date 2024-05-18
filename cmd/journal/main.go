@@ -58,9 +58,7 @@ func main() {
 	url = "/courses/{courseID}/modify/students"
 	accessControl.Add(url, "admin")
 	router.Post(url, courses.EnrollStudents(url, log, storage, accessControl))
-
-	// TODO: delete students from course
-	// router.Delete(url, courses.Create(url, log, storage, accessControl))
+	router.Delete(url, courses.RemoveStudents(url, log, storage, accessControl))
 
 	// Start server
 	log.Info("staring server", slog.String("address", cfg.Address))
