@@ -1,7 +1,7 @@
 package models
 
 type Key struct {
-	ID    int
+	ID    int64
 	Email string
 	Role  string
 }
