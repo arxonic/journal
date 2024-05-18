@@ -5,5 +5,6 @@ import (
 )
 
 var (
-	ErrUserNotFound = errors.New("user not found")
+	ErrUserNotFound   = errors.New("user not found")
+	ErrCourseNotFound = errors.New("course not found")
 )

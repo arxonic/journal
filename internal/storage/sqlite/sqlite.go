@@ -46,7 +46,7 @@ func (s *Storage) UserRole(email string) (models.Key, error) {
 	return key, nil
 }
 
-func (s *Storage) SaveCourse(course *scheme.Course) (int64, error) {
+func (s *Storage) SaveCourse(course *scheme.CourseCreation) (int64, error) {
 	const fn = "storage.sqlite.SaveCourse"
 
 	stmt, err := s.db.Prepare("INSERT INTO courses (num, name) VALUES (?, ?)")
@@ -100,7 +100,7 @@ func (s *Storage) EnrollStudents(enrollments *scheme.Enrollments) error {
 }
 
 func (s *Storage) RemoveStudents(enrollments *scheme.Enrollments) error {
-	const fn = "storage.sqlite.EnrollStudents"
+	const fn = "storage.sqlite.RemoveStudents"
 
 	stmt, err := s.db.Prepare("DELETE FROM enrollments WHERE course_id = ? AND student_id = ?")
 	if err != nil {
@@ -116,4 +116,52 @@ func (s *Storage) RemoveStudents(enrollments *scheme.Enrollments) error {
 	}
 
 	return nil
+}
+
+func (s *Storage) TeacherCourses(teacherID int) (scheme.Courses, error) {
+	const fn = "storage.sqlite.TeacherCourses"
+
+	// Get Assignments
+	stmt, err := s.db.Prepare("SELECT course_id FROM assignments WHERE teacher_id = ?")
+	if err != nil {
+		return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(teacherID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return scheme.Courses{}, store.ErrCourseNotFound
+		}
+		return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	var courses scheme.Courses
+
+	// Get Courses from Assignments
+	for rows.Next() {
+		// Get Assignment
+		var ass scheme.Assignment
+		if err := rows.Scan(&ass.CourseID); err != nil {
+			return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		// Get Course from this Assignment
+		stmt, err = s.db.Prepare("SELECT id, name, num FROM courses WHERE id = ?")
+		if err != nil {
+			return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		var course scheme.Course
+		err = stmt.QueryRow(ass.CourseID).Scan(&course.ID, &course.Name, &course.Number)
+		if err != nil {
+			return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
+
+		}
+
+		// Append Course
+		courses.Courses = append(courses.Courses, course)
+	}
+
+	return courses, nil
 }

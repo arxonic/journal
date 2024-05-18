@@ -15,8 +15,56 @@ import (
 	"github.com/go-chi/render"
 )
 
+type CoursesGetter interface {
+	TeacherCourses(int) (scheme.Courses, error)
+}
+
+type GetCoursesResponse struct {
+	resp.Responce
+	scheme.Courses
+}
+
+func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const fn = "http-server.handlers.url.cources.Get"
+
+		log = log.With(
+			slog.String("fn", fn),
+		)
+
+		// User role check
+		userAuthData := r.Context().Value(auth.ContextAuthMiddlewareKey).(*models.Key)
+		if !ac.Contains(url, userAuthData.Role) {
+			log.Error("unauthorized operation", sl.Err(policy.ErrUnauthorized))
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		log = log.With(
+			slog.Int("user_id", userAuthData.ID),
+		)
+
+		switch role := userAuthData.Role; role {
+		case "teacher":
+			courses, err := s.TeacherCourses(userAuthData.ID)
+			if err != nil {
+				log.Error("failed to get courses", sl.Err(err))
+				render.JSON(w, r, resp.Error("failed to get courses"))
+				return
+			}
+			render.JSON(w, r, GetCoursesResponse{
+				Responce: resp.OK(),
+				Courses:  courses,
+			})
+		case "student":
+
+		case "admin":
+		}
+	}
+}
+
 type CourseSaver interface {
-	SaveCourse(*scheme.Course) (int64, error)
+	SaveCourse(*scheme.CourseCreation) (int64, error)
 }
 
 type CreateCourseResponse struct {
@@ -44,7 +92,7 @@ func Create(url string, log *slog.Logger, s CourseSaver, ac *policy.AccessContro
 			slog.Int("user_id", userAuthData.ID),
 		)
 
-		var req scheme.Course
+		var req scheme.CourseCreation
 
 		err := render.DecodeJSON(r.Body, &req)
 		if err != nil {
@@ -126,7 +174,7 @@ func EnrollStudents(url string, log *slog.Logger, s StudentsEnroller, ac *policy
 		}
 
 		// Response
-		render.JSON(w, r, CreateCourseResponse{
+		render.JSON(w, r, EnrollStudentsResponse{
 			Responce: resp.OK(),
 		})
 
@@ -190,7 +238,7 @@ func RemoveStudents(url string, log *slog.Logger, s StudentsRemover, ac *policy.
 		}
 
 		// Response
-		render.JSON(w, r, CreateCourseResponse{
+		render.JSON(w, r, RemoveStudentsResponse{
 			Responce: resp.OK(),
 		})
 

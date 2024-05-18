@@ -51,7 +51,11 @@ func main() {
 	router.Use(authMiddleware.Auth)
 
 	// Handlers
-	url := "/courses/create"
+	url := "/courses"
+	accessControl.Add(url, "admin", "teacher", "student")
+	router.Get(url, courses.Get(url, log, storage, accessControl))
+
+	url = "/courses/create"
 	accessControl.Add(url, "admin")
 	router.Post(url, courses.Create(url, log, storage, accessControl))
 
