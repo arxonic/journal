@@ -79,3 +79,22 @@ func (s *Storage) SaveCourse(course *scheme.Course) (int64, error) {
 
 	return courseID, nil
 }
+
+func (s *Storage) EnrollStudents(enrollments *scheme.Enrollments) error {
+	const fn = "storage.sqlite.EnrollStudents"
+
+	stmt, err := s.db.Prepare("INSERT INTO enrollments (course_id, student_id) VALUES (?, ?)")
+	if err != nil {
+		return fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	for _, enroll := range enrollments.Enrollments {
+		_, err = stmt.Exec(enroll.CourseID, enroll.StudentID)
+		if err != nil {
+			return fmt.Errorf("%s:%w", fn, err)
+		}
+	}
+
+	return nil
+}
