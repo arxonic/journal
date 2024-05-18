@@ -16,12 +16,14 @@ import (
 )
 
 type CoursesGetter interface {
-	TeacherCourses(int) (scheme.Courses, error)
+	TeacherCourses(int64) (scheme.Courses, error)
+	StudentCourses(int64) (scheme.Courses, error)
 }
 
 type GetCoursesResponse struct {
 	resp.Responce
 	scheme.Courses
+	scheme.Enrollments
 }
 
 func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl) http.HandlerFunc {
@@ -32,7 +34,7 @@ func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl
 			slog.String("fn", fn),
 		)
 
-		// User role check
+		// User Role check
 		userAuthData := r.Context().Value(auth.ContextAuthMiddlewareKey).(*models.Key)
 		if !ac.Contains(url, userAuthData.Role) {
 			log.Error("unauthorized operation", sl.Err(policy.ErrUnauthorized))
@@ -41,26 +43,39 @@ func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl
 		}
 
 		log = log.With(
-			slog.Int("user_id", userAuthData.ID),
+			slog.Int64("user_id", userAuthData.ID),
 		)
 
-		switch role := userAuthData.Role; role {
-		case "teacher":
-			courses, err := s.TeacherCourses(userAuthData.ID)
-			if err != nil {
-				log.Error("failed to get courses", sl.Err(err))
-				render.JSON(w, r, resp.Error("failed to get courses"))
-				return
-			}
-			render.JSON(w, r, GetCoursesResponse{
-				Responce: resp.OK(),
-				Courses:  courses,
-			})
-		case "student":
-
-		case "admin":
+		// Get Courses
+		courses, err := get(s, userAuthData.ID, userAuthData.Role)
+		if err != nil {
+			log.Error("failed to decode request body", sl.Err(err))
+			render.JSON(w, r, resp.Error("failed to decode request"))
+			return
 		}
+
+		// Response
+		render.JSON(w, r, GetCoursesResponse{
+			Responce: resp.OK(),
+			Courses:  courses,
+		})
 	}
+}
+
+func get(s CoursesGetter, id int64, role string) (scheme.Courses, error) {
+	var courses scheme.Courses
+	var err error
+	switch role {
+	case "teacher":
+		courses, err = s.TeacherCourses(id)
+	case "student":
+		courses, err = s.StudentCourses(id)
+	case "admin":
+
+	default:
+		err = policy.ErrUnauthorized
+	}
+	return courses, err
 }
 
 type CourseSaver interface {
@@ -89,7 +104,7 @@ func Create(url string, log *slog.Logger, s CourseSaver, ac *policy.AccessContro
 		}
 
 		log = log.With(
-			slog.Int("user_id", userAuthData.ID),
+			slog.Int64("user_id", userAuthData.ID),
 		)
 
 		var req scheme.CourseCreation
@@ -145,16 +160,18 @@ func EnrollStudents(url string, log *slog.Logger, s StudentsEnroller, ac *policy
 		// Get courseID from URL
 		courseIDString := chi.URLParam(r, "courseID")
 
-		courseID, err := strconv.Atoi(courseIDString)
+		_courseID, err := strconv.Atoi(courseIDString)
 		if err != nil {
 			log.Info("unknown courseID")
 			render.JSON(w, r, resp.Error("course not found"))
 			return
 		}
 
+		courseID := int64(_courseID)
+
 		log = log.With(
-			slog.Int("user_id", userAuthData.ID),
-			slog.Int("course_id", courseID),
+			slog.Int64("user_id", userAuthData.ID),
+			slog.Int64("course_id", courseID),
 		)
 
 		var req scheme.Enrollments
@@ -217,7 +234,7 @@ func RemoveStudents(url string, log *slog.Logger, s StudentsRemover, ac *policy.
 		}
 
 		log = log.With(
-			slog.Int("user_id", userAuthData.ID),
+			slog.Int64("user_id", userAuthData.ID),
 			slog.Int("course_id", courseID),
 		)
 

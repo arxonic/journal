@@ -118,50 +118,126 @@ func (s *Storage) RemoveStudents(enrollments *scheme.Enrollments) error {
 	return nil
 }
 
-func (s *Storage) TeacherCourses(teacherID int) (scheme.Courses, error) {
+// FIXME Simplify methods
+
+func (s *Storage) TeacherCourses(teacherID int64) (scheme.Courses, error) {
 	const fn = "storage.sqlite.TeacherCourses"
 
-	// Get Assignments
-	stmt, err := s.db.Prepare("SELECT course_id FROM assignments WHERE teacher_id = ?")
+	assignments, err := s.AssignmentsByFK(teacherID, "teacher_id")
 	if err != nil {
-		return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
-	}
-	defer stmt.Close()
-
-	rows, err := stmt.Query(teacherID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return scheme.Courses{}, store.ErrCourseNotFound
-		}
 		return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
 	}
 
 	var courses scheme.Courses
 
-	// Get Courses from Assignments
-	for rows.Next() {
-		// Get Assignment
-		var ass scheme.Assignment
-		if err := rows.Scan(&ass.CourseID); err != nil {
-			return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
-		}
-
-		// Get Course from this Assignment
-		stmt, err = s.db.Prepare("SELECT id, name, num FROM courses WHERE id = ?")
+	for _, ass := range assignments.Assignments {
+		course, err := s.Course(ass.CourseID)
 		if err != nil {
 			return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
 		}
 
-		var course scheme.Course
-		err = stmt.QueryRow(ass.CourseID).Scan(&course.ID, &course.Name, &course.Number)
-		if err != nil {
-			return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
-
-		}
-
-		// Append Course
 		courses.Courses = append(courses.Courses, course)
 	}
 
 	return courses, nil
+}
+
+func (s *Storage) StudentCourses(studentID int64) (scheme.Courses, error) {
+	const fn = "storage.sqlite.StudentCourses"
+
+	enrolls, err := s.EntollmentsByFK(studentID, "student_id")
+	if err != nil {
+		return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	var courses scheme.Courses
+
+	for _, enroll := range enrolls.Enrollments {
+		course, err := s.Course(enroll.CourseID)
+		if err != nil {
+			return scheme.Courses{}, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		courses.Courses = append(courses.Courses, course)
+	}
+
+	return courses, nil
+}
+
+// Get the Course by ID
+func (s *Storage) Course(courseID int64) (scheme.Course, error) {
+	const fn = "storage.sqlite.Course"
+
+	stmt, err := s.db.Prepare("SELECT id, name, num FROM courses WHERE id = ?")
+	if err != nil {
+		return scheme.Course{}, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	var course scheme.Course
+
+	err = stmt.QueryRow(courseID).Scan(&course.ID, &course.Name, &course.Number)
+	if err != nil {
+		return scheme.Course{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	return course, nil
+}
+
+func (s *Storage) AssignmentsByFK(fk int64, fieldName string) (scheme.Assignments, error) {
+	const fn = "storage.sqlite.AssignmentsByFK"
+
+	req := fmt.Sprintf("SELECT id, course_id, discipline_id, teacher_id FROM assignments WHERE %s = ?", fieldName)
+	stmt, err := s.db.Prepare(req)
+	if err != nil {
+		return scheme.Assignments{}, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(fk)
+	if err != nil {
+		return scheme.Assignments{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	var assignments scheme.Assignments
+
+	for rows.Next() {
+		var ass scheme.Assignment
+		if err := rows.Scan(&ass.ID, &ass.CourseID, &ass.DisciplineID, &ass.TeacherID); err != nil {
+			return scheme.Assignments{}, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		assignments.Assignments = append(assignments.Assignments, ass)
+	}
+
+	return assignments, nil
+}
+
+func (s *Storage) EntollmentsByFK(fk int64, fieldName string) (scheme.Enrollments, error) {
+	const fn = "storage.sqlite.EntollmentsByFK"
+
+	req := fmt.Sprintf("SELECT id, course_id, student_id FROM enrollments WHERE %s = ?", fieldName)
+	stmt, err := s.db.Prepare(req)
+	if err != nil {
+		return scheme.Enrollments{}, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(fk)
+	if err != nil {
+		return scheme.Enrollments{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	var enrolls scheme.Enrollments
+
+	for rows.Next() {
+		var enroll scheme.Enrollment
+		if err := rows.Scan(&enroll.ID, &enroll.CourseID, &enroll.StudentID); err != nil {
+			return scheme.Enrollments{}, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		enrolls.Enrollments = append(enrolls.Enrollments, enroll)
+	}
+
+	return enrolls, nil
 }
