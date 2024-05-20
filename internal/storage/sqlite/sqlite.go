@@ -26,6 +26,26 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
+func (s *Storage) User(userID int64) (scheme.User, error) {
+	const fn = "storage.sqlite.User"
+
+	stmt, err := s.db.Prepare("SELECT id, last_name, first_name, patronymic FROM users WHERE id = ?")
+	if err != nil {
+		return scheme.User{}, err
+	}
+
+	var user scheme.User
+	err = stmt.QueryRow(userID).Scan(&user.ID, &user.LastName, &user.FirstName, &user.Patronymic)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return scheme.User{}, store.ErrUserNotFound
+		}
+		return scheme.User{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	return user, nil
+}
+
 func (s *Storage) UserRole(email string) (models.Key, error) {
 	const fn = "storage.sqlite.UserRole"
 
@@ -182,6 +202,98 @@ func (s *Storage) Course(courseID int64) (scheme.Course, error) {
 	}
 
 	return course, nil
+}
+
+// Get the Course by ID
+func (s *Storage) Discipline(disciplineID int64) (scheme.Discipline, error) {
+	const fn = "storage.sqlite.Discipline"
+
+	stmt, err := s.db.Prepare("SELECT id, name FROM disciplines WHERE id = ?")
+	if err != nil {
+		return scheme.Discipline{}, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	var disc scheme.Discipline
+
+	err = stmt.QueryRow(disciplineID).Scan(&disc.ID, &disc.Name)
+	if err != nil {
+		return scheme.Discipline{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	return disc, nil
+}
+
+func (s *Storage) DisciplineTeacher(courseID, disciplineID int64) ([]scheme.User, error) {
+	const fn = "storage.sqlite.DisciplineTeacher"
+
+	teacherIDs, err := s.AssignmentsTeacher(courseID, disciplineID)
+	if err != nil {
+		return nil, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	users := make([]scheme.User, 0)
+
+	for _, id := range teacherIDs {
+		user, err := s.User(id)
+		if err != nil {
+			return nil, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
+func (s *Storage) CourseDisciplines(courseID int64) (scheme.Disciplines, error) {
+	const fn = "storage.sqlite.CourseDisciplines"
+
+	assignments, err := s.AssignmentsByFK(courseID, "course_id")
+	if err != nil {
+		return scheme.Disciplines{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	var disciplines scheme.Disciplines
+
+	for _, ass := range assignments.Assignments {
+		disc, err := s.Discipline(ass.DisciplineID)
+		if err != nil {
+			return scheme.Disciplines{}, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		disciplines.Disciplines = append(disciplines.Disciplines, disc)
+	}
+
+	return disciplines, nil
+}
+
+func (s *Storage) AssignmentsTeacher(courseID, disciplineID int64) ([]int64, error) {
+	const fn = "storage.sqlite.AssignmentsTeacher"
+
+	stmt, err := s.db.Prepare("SELECT teacher_id FROM assignments WHERE course_id = ? AND discipline_id = ?")
+	if err != nil {
+		return nil, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(courseID, disciplineID)
+	if err != nil {
+		return nil, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	teacherIDs := make([]int64, 0)
+
+	for rows.Next() {
+		var teacherID int64
+		if err := rows.Scan(&teacherID); err != nil {
+			return nil, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		teacherIDs = append(teacherIDs, teacherID)
+	}
+
+	return teacherIDs, nil
 }
 
 func (s *Storage) AssignmentsByFK(fk int64, fieldName string) (scheme.Assignments, error) {

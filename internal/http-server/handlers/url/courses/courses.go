@@ -18,12 +18,13 @@ import (
 type CoursesGetter interface {
 	TeacherCourses(int64) (scheme.Courses, error)
 	StudentCourses(int64) (scheme.Courses, error)
+	CourseDisciplines(int64) (scheme.Disciplines, error)
+	DisciplineTeacher(int64, int64) ([]scheme.User, error)
 }
 
 type GetCoursesResponse struct {
 	resp.Responce
 	scheme.Courses
-	scheme.Enrollments
 }
 
 func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl) http.HandlerFunc {
@@ -47,11 +48,32 @@ func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl
 		)
 
 		// Get Courses
-		courses, err := get(s, userAuthData.ID, userAuthData.Role)
+		courses, err := getCourses(s, userAuthData.ID, userAuthData.Role)
 		if err != nil {
-			log.Error("failed to decode request body", sl.Err(err))
-			render.JSON(w, r, resp.Error("failed to decode request"))
+			log.Error("failed to get courses", sl.Err(err))
+			render.JSON(w, r, resp.Error("failed to get courses"))
 			return
+		}
+
+		// Get Disciplines
+		for i, course := range courses.Courses {
+			disciplines, err := s.CourseDisciplines(course.ID)
+			if err != nil {
+				log.Error("failed to get disciplines", sl.Err(err))
+				continue
+			}
+
+			courses.Courses[i].Disciplines = disciplines
+
+			for j, disc := range disciplines.Disciplines {
+				teacher, err := s.DisciplineTeacher(course.ID, disc.ID)
+				if err != nil {
+					log.Error("failed to get teacher", sl.Err(err))
+					continue
+				}
+
+				courses.Courses[i].Disciplines.Disciplines[j].Teachers = teacher
+			}
 		}
 
 		// Response
@@ -62,7 +84,7 @@ func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl
 	}
 }
 
-func get(s CoursesGetter, id int64, role string) (scheme.Courses, error) {
+func getCourses(s CoursesGetter, id int64, role string) (scheme.Courses, error) {
 	var courses scheme.Courses
 	var err error
 	switch role {

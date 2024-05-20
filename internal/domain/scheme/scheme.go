@@ -1,5 +1,13 @@
 package scheme
 
+// User
+type User struct {
+	ID         int64  `json:"user_id"`
+	LastName   string `json:"last_name"`
+	FirstName  string `json:"first_name"`
+	Patronymic string `json:"patronymic"`
+}
+
 // Test
 type CourseCreation struct {
 	Name     string    `json:"name"`
@@ -32,6 +40,18 @@ type Course struct {
 	ID     int64  `json:"course_id"`
 	Name   string `json:"course_name"`
 	Number int    `json:"course_number"`
+	Disciplines
+}
+
+// Disciplines
+type Disciplines struct {
+	Disciplines []Discipline `json:"disciplines"`
+}
+
+type Discipline struct {
+	ID       int64  `json:"discipline_id"`
+	Name     string `json:"discipline_name"`
+	Teachers []User `json:"teachers,omitempty"`
 }
 
 // Assignments
