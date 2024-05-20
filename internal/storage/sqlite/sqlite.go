@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/arxonic/journal/internal/domain/models"
 	"github.com/arxonic/journal/internal/domain/scheme"
@@ -268,6 +269,26 @@ func (s *Storage) CourseDisciplines(courseID int64) (scheme.Disciplines, error) 
 	return disciplines, nil
 }
 
+func (s *Storage) AssignmentID(courseID, disciplineID, teacherID int64) (int64, error) {
+	const fn = "storage.sqlite.AssignmentID"
+
+	stmt, err := s.db.Prepare("SELECT id FROM assignments WHERE course_id = ? AND discipline_id = ? AND teacher_id = ?")
+	if err != nil {
+		return 0, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	row := stmt.QueryRow(courseID, disciplineID, teacherID)
+
+	var id int64
+
+	if err := row.Scan(&id); err != nil {
+		return 0, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	return id, nil
+}
+
 func (s *Storage) AssignmentsTeacher(courseID, disciplineID int64) ([]int64, error) {
 	const fn = "storage.sqlite.AssignmentsTeacher"
 
@@ -352,4 +373,21 @@ func (s *Storage) EntollmentsByFK(fk int64, fieldName string) (scheme.Enrollment
 	}
 
 	return enrolls, nil
+}
+
+func (s *Storage) ExamSignUp(studentID, assignmentID int64, examDate time.Time) error {
+	const fn = "storage.sqlite.ExamSignUp"
+
+	stmt, err := s.db.Prepare("INSERT INTO exams (student_id, assignment_id, exam_date) VALUES (?, ?, ?)")
+	if err != nil {
+		return fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(studentID, assignmentID, examDate)
+	if err != nil {
+		return fmt.Errorf("%s:%w", fn, err)
+	}
+
+	return nil
 }

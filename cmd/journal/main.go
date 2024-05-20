@@ -10,6 +10,7 @@ import (
 
 	"github.com/arxonic/journal/internal/config"
 	"github.com/arxonic/journal/internal/http-server/handlers/url/courses"
+	"github.com/arxonic/journal/internal/http-server/handlers/url/exams"
 	"github.com/arxonic/journal/internal/http-server/middleware/auth"
 	"github.com/arxonic/journal/internal/lib/logger/sl"
 	"github.com/arxonic/journal/internal/services/policy"
@@ -63,6 +64,10 @@ func main() {
 	accessControl.Add(url, "admin")
 	router.Post(url, courses.EnrollStudents(url, log, storage, accessControl))
 	router.Delete(url, courses.RemoveStudents(url, log, storage, accessControl))
+
+	url = "/exams/signup"
+	accessControl.Add(url, "student")
+	router.Post(url, exams.ExamSignUp(url, log, storage, accessControl))
 
 	// Start server
 	log.Info("staring server", slog.String("address", cfg.Address))

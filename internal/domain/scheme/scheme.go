@@ -1,5 +1,7 @@
 package scheme
 
+import "time"
+
 // User
 type User struct {
 	ID         int64  `json:"user_id"`
@@ -64,4 +66,12 @@ type Assignment struct {
 	CourseID     int64 `json:"course_id"`
 	DisciplineID int64 `json:"discipline_id"`
 	TeacherID    int64 `json:"teacher_id"`
+}
+
+// Exam
+type Exam struct {
+	ID           int64     `json:"exam_id"`
+	StudentID    int64     `json:"student_id"`
+	AssignmentID int64     `json:"assignment_id"`
+	ExamDate     time.Time `json:"exam_date"`
 }
