@@ -20,6 +20,9 @@ type CoursesGetter interface {
 	StudentCourses(int64) (scheme.Courses, error)
 	CourseDisciplines(int64) (scheme.Disciplines, error)
 	DisciplineTeacher(int64, int64) ([]scheme.User, error)
+	AssignmentID(int64, int64, int64) (int64, error)
+	ExamsByStudentIDAndAssignmentID(int64, int64) ([]scheme.Exam, error)
+	GradeByExamID(int64) (scheme.Grade, error)
 }
 
 type GetCoursesResponse struct {
@@ -55,6 +58,9 @@ func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl
 			return
 		}
 
+		// TODO: Реализовать это в курсах
+		// Сверху средний бал курса, а рядом с дисциплиной оценка 1 (как в дизайне)
+
 		// Get Disciplines
 		for i, course := range courses.Courses {
 			disciplines, err := s.CourseDisciplines(course.ID)
@@ -66,13 +72,42 @@ func Get(url string, log *slog.Logger, s CoursesGetter, ac *policy.AccessControl
 			courses.Courses[i].Disciplines = disciplines
 
 			for j, disc := range disciplines.Disciplines {
-				teacher, err := s.DisciplineTeacher(course.ID, disc.ID)
+				teachers, err := s.DisciplineTeacher(course.ID, disc.ID)
 				if err != nil {
 					log.Error("failed to get teacher", sl.Err(err))
 					continue
 				}
 
-				courses.Courses[i].Disciplines.Disciplines[j].Teachers = teacher
+				courses.Courses[i].Disciplines.Disciplines[j].Teachers = teachers
+
+				for _, t := range teachers {
+					ass, err := s.AssignmentID(course.ID, disc.ID, t.ID)
+					if err != nil {
+						log.Error("failed to get assignment", sl.Err(err))
+						continue
+					}
+
+					exams, err := s.ExamsByStudentIDAndAssignmentID(userAuthData.ID, ass)
+					if err != nil {
+						log.Error("failed to get exams", sl.Err(err))
+						continue
+					}
+
+					grades := make([]scheme.Grade, 0)
+
+					for _, exam := range exams {
+						grade, err := s.GradeByExamID(exam.ID)
+						if err != nil {
+							log.Error("failed to get grade", sl.Err(err))
+							continue
+						}
+						grades = append(grades, grade)
+					}
+
+					if len(grades) >= 1 {
+						courses.Courses[i].Disciplines.Disciplines[j].Grade = grades[len(grades)-1]
+					}
+				}
 			}
 		}
 

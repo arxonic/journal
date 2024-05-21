@@ -54,6 +54,7 @@ type Discipline struct {
 	ID       int64  `json:"discipline_id"`
 	Name     string `json:"discipline_name"`
 	Teachers []User `json:"teachers,omitempty"`
+	Grade    Grade  `json:"grade,omitempty"`
 }
 
 // Assignments
@@ -74,4 +75,13 @@ type Exam struct {
 	StudentID    int64     `json:"student_id"`
 	AssignmentID int64     `json:"assignment_id"`
 	ExamDate     time.Time `json:"exam_date"`
+}
+
+// Grade
+type Grade struct {
+	ID        int64     `json:"grade_id"`
+	ExamID    int64     `json:"exam_id"`
+	TeacherID int64     `json:"teacher_id"`
+	Grade     int64     `json:"grade"`
+	GradeDate time.Time `json:"grade_date"`
 }

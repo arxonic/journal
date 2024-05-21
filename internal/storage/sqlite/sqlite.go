@@ -391,3 +391,111 @@ func (s *Storage) ExamSignUp(studentID, assignmentID int64, examDate time.Time) 
 
 	return nil
 }
+
+func (s *Storage) ExamID(studentID, assignmentID int64, examDate time.Time) (int64, error) {
+	const fn = "storage.sqlite.ExamID"
+
+	stmt, err := s.db.Prepare("SELECT id FROM exams WHERE student_id = ? AND assignment_id = ? AND exam_date = ?")
+	if err != nil {
+		return 0, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	row := stmt.QueryRow(studentID, assignmentID, examDate)
+
+	var id int64
+
+	if err := row.Scan(&id); err != nil {
+		return 0, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	return id, nil
+}
+
+func (s *Storage) ExamsByStudentIDAndAssignmentID(studentID, assignmentID int64) ([]scheme.Exam, error) {
+	const fn = "storage.sqlite.ExamsByStudentIDAndAssignmentID"
+
+	stmt, err := s.db.Prepare("SELECT id, exam_date FROM exams WHERE student_id = ? AND assignment_id = ?")
+	if err != nil {
+		return nil, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(studentID, assignmentID)
+	if err != nil {
+		return nil, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	exams := make([]scheme.Exam, 0)
+
+	for rows.Next() {
+		var exam scheme.Exam
+		if err := rows.Scan(&exam.ID, &exam.ExamDate); err != nil {
+			return nil, fmt.Errorf("%s:%w", fn, err)
+		}
+
+		exam.StudentID = studentID
+		exam.AssignmentID = assignmentID
+
+		exams = append(exams, exam)
+	}
+
+	return exams, nil
+}
+
+func (s *Storage) GradeByExamID(examID int64) (scheme.Grade, error) {
+	const fn = "storage.sqlite.GradeByExamID"
+
+	stmt, err := s.db.Prepare("SELECT id, teacher_id, grade, grade_date FROM grades WHERE exam_id = ?")
+	if err != nil {
+		return scheme.Grade{}, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	var grade scheme.Grade
+
+	err = stmt.QueryRow(examID).Scan(&grade.ID, &grade.TeacherID, &grade.Grade, &grade.GradeDate)
+	if err != nil {
+		return scheme.Grade{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	grade.ExamID = examID
+
+	return grade, nil
+}
+
+func (s *Storage) ExamGrade(examID, teacherID int64, grade int, examDate time.Time) error {
+	const fn = "storage.sqlite.ExamGrade"
+
+	stmt, err := s.db.Prepare("INSERT INTO grades (exam_id, teacher_id, grade, grade_date) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		return fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(examID, teacherID, grade, examDate)
+	if err != nil {
+		return fmt.Errorf("%s:%w", fn, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) Assignment(assignmentID int64) (scheme.Assignment, error) {
+	const fn = "storage.sqlite.Assignment"
+
+	stmt, err := s.db.Prepare("SELECT id, course_id, discipline_id, teacher_id FROM assignments WHERE id = ?")
+	if err != nil {
+		return scheme.Assignment{}, fmt.Errorf("%s:%w", fn, err)
+	}
+	defer stmt.Close()
+
+	var assignment scheme.Assignment
+
+	err = stmt.QueryRow(assignmentID).Scan(&assignment.ID, &assignment.CourseID, &assignment.DisciplineID, &assignment.TeacherID)
+	if err != nil {
+		return scheme.Assignment{}, fmt.Errorf("%s:%w", fn, err)
+	}
+
+	return assignment, nil
+}

@@ -69,6 +69,10 @@ func main() {
 	accessControl.Add(url, "student")
 	router.Post(url, exams.ExamSignUp(url, log, storage, accessControl))
 
+	url = "/exams/grade"
+	accessControl.Add(url, "teacher")
+	router.Post(url, exams.ExamGrade(url, log, storage, accessControl))
+
 	// Start server
 	log.Info("staring server", slog.String("address", cfg.Address))
 
